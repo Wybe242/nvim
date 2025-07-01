@@ -20,47 +20,31 @@ return {
       lspconfig.lua_ls.setup {
         cmd = { path .. "/lua-language-server/bin/lua-language-server" },
       }
+      -- Setup vscode-html-languageservice
+      lspconfig.html.setup {}
+      -- Setup typescript/javascript 
+      lspconfig.ts_ls.setup {}
 
-      -- Setup capabilities for HTML LSP
-      local capabilities = vim.lsp.protocol.make_client_capabilities()
-      capabilities.textDocument.completion.completionItem.snippetSupport = true
+      vim.api.nvim_create_autocmd('LspAttach', {
+	  group = vim.api.nvim_create_augroup('my.lsp', {}),
+	  callback = function(args)
+	    local client = assert(vim.lsp.get_client_by_id(args.data.client_id))
+	    if not client then return end
 
-      lspconfig.html.setup {
-        capabilities = capabilities,
-      }
-    end,
-  },
-{
-    "hrsh7th/nvim-cmp",
-    dependencies = {
-      "hrsh7th/cmp-nvim-lsp",     -- LSP source
-      "L3MON4D3/LuaSnip",         -- Snippet engine
-      "saadparwaiz1/cmp_luasnip", -- LuaSnip source
-      "rafamadriz/friendly-snippets", -- Snippet collection
-    },
-    config = function()
-      local cmp = require("cmp")
-      local luasnip = require("luasnip")
-
-      require("luasnip.loaders.from_vscode").lazy_load() -- Load friendly snippets
-
-      cmp.setup({
-        snippet = {
-          expand = function(args)
-            luasnip.lsp_expand(args.body)
-          end,
-        },
-        mapping = cmp.mapping.preset.insert({
-          ["<Tab>"] = cmp.mapping.select_next_item(),
-          ["<S-Tab>"] = cmp.mapping.select_prev_item(),
-          ["<CR>"] = cmp.mapping.confirm({ select = true }),
-        }),
-        sources = cmp.config.sources({
-          { name = "nvim_lsp" },
-          { name = "luasnip" },
-        }),
-      })
+	    -- Auto-format ("lint") on save.
+	    -- Usually not needed if server supports "textDocument/willSaveWaitUntil".
+	    if not client:supports_method('textDocument/willSaveWaitUntil')
+	      and client:supports_method('textDocument/formatting') then
+	      vim.api.nvim_create_autocmd('BufWritePre', {
+		group = vim.api.nvim_create_augroup('my.lsp', {clear=false}),
+		buffer = args.buf,
+		callback = function()
+		  vim.lsp.buf.format({ bufnr = args.buf, id = client.id, timeout_ms = 1000 })
+		end,
+	      })
+	    end
+	  end,
+	})
     end,
   },
 }
-
